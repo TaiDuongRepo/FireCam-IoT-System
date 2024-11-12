@@ -1,6 +1,8 @@
 
 FROM python:3.9
 
+# Use the official OpenCV base image
+FROM pachyderm/opencv
 
 WORKDIR /code
 
