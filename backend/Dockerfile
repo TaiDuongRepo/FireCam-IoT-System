@@ -1,8 +1,6 @@
 
-FROM python:3.9
+FROM ultralytics/ultralytics:latest
 
-# Use the official OpenCV base image
-FROM pachyderm/opencv
 
 WORKDIR /code
 

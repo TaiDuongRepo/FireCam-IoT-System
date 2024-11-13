@@ -6,13 +6,14 @@ services:
       - "80:80"
     volumes:
       - ./backend/app:/code/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    depends_on:
-      - backend
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend/src:/app/src
+  #     - ./frontend/public:/app/public
+  #   depends_on:
+  #     - backend

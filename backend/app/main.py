@@ -1,16 +1,14 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
-
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-
-from models.detection import Detection
 import cv2
+import numpy as np
+from ultralytics import YOLO
 
 app = FastAPI()
-detection = Detection()
 
-
+# CORS để hỗ trợ client
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -19,33 +17,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# @app.get("/")
-# async def read_root():
-#     return {"Hello": "World"}
-
-
-def gen_frames():
-    cap = cv2.VideoCapture(0)
-    while cap.isOpened():
-        ret, frame = cap.read()
-        frame = cv2.resize(frame, (512, 512))
-        if frame is None:
-            break
-        frame = detection.detect_from_image(frame)
-
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 templates = Jinja2Templates(directory="/code/app/templates")
-@app.get('/')
-def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
 
+# Load YOLO model
+model = YOLO("yolov8n.pt")  # Chọn YOLOv8 phiên bản nhỏ
 
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse('index.html', {"request": request})
 
-@app.get('/video_feed')
-def video_feed():
-    return StreamingResponse(gen_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+@app.post("/upload_frame")
+async def upload_frame(file: UploadFile):
+    # Đọc dữ liệu hình ảnh
+    image_data = await file.read()
+    nparr = np.frombuffer(image_data, np.uint8)
+    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    # Dùng YOLO để phát hiện đối tượng trên frame
+    results = model(frame)
+    for result in results:
+        for box in result.boxes:
+            # Vẽ các bounding boxes
+            x1, y1, x2, y2 = map(int, box.xyxy[0])  # Bounding box coordinates
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Draw box
+            label = f"{int(box.cls)} {float(box.conf):.2f}"  # Chuyển sang int và float
+            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+    return {"message": "Frame processed"}

@@ -1,11 +1,49 @@
- <!-- index.html -->
- <html>
-    <head>
-      <title>Video Streaming Demonstration</title>
-    </head>
-    <body>
-      <h1>Video Streaming Demonstration</h1>
-      <img src="{{ url_for('video_feed') }}">
-    </body>
-  </html>
-  
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Stream to Server</title>
+</head>
+
+<body>
+    <p>TaiDuong DevOps</p>
+    <h1>Stream Camera Feed to Server</h1>
+    <video id="video" autoplay playsinline></video>
+    <script>
+        async function startCamera() {
+            const video = document.getElementById('video');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+
+            function captureFrame() {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // Chuyển đổi frame thành Blob và gửi đến server dưới dạng FormData
+                canvas.toBlob(async (blob) => {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'frame.jpg');  // Đặt tên cho file để FastAPI nhận diện
+
+                    await fetch("/upload_frame", {
+                        method: "POST",
+                        body: formData
+                    });
+                }, 'image/jpeg');
+
+                // Lặp lại hàm này để gửi frame tiếp theo
+                requestAnimationFrame(captureFrame);
+            }
+            captureFrame();
+        }
+
+        startCamera();
+    </script>
+</body>
+
+</html>
