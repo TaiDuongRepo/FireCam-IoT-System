@@ -4,14 +4,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Stream to Server</title>
+    <title>Camera View Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        }
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .selected-camera {
+            border: 2px solid blue;
+        }
+    </style>
 </head>
 
-<body>
-    <p>TaiDuong DevOps</p>
-    <h1>Stream Camera Feed to Server</h1>
-    <video id="video" autoplay playsinline></video>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <header class="flex justify-between items-center mb-4">
+            <div class="flex items-center">
+                <h1 class="text-2xl font-bold mr-4">Logo</h1>
+                <h2 class="text-xl" id="camera-view">Camera 0 - View</h2>
+            </div>
+            <div class="text-xl font-mono" id="timer">01:02:03</div>
+            <div class="flex items-center">
+                <input type="text" placeholder="Search camera..." class="border rounded-l px-2 py-1">
+                <button class="bg-blue-500 text-white px-2 py-1 rounded-r">
+                    <i data-feather="search"></i>
+                </button>
+            </div>
+            <button class="bg-gray-200 rounded-full p-2">
+                <i data-feather="plus"></i>
+            </button>
+        </header>
+
+        <div class="grid grid-cols-4 gap-4 mb-4">
+            <div class="bg-white p-4 rounded shadow cursor-pointer" onclick="selectCamera(0)" id="cam-0">Cam 0</div>
+            <div class="bg-white p-4 rounded shadow cursor-pointer" onclick="selectCamera(1)" id="cam-1">Cam 1</div>
+            <div class="bg-white p-4 rounded shadow cursor-pointer" onclick="selectCamera(2)" id="cam-2">Cam 2</div>
+            <div class="bg-white p-4 rounded shadow cursor-pointer" onclick="selectCamera(3)" id="cam-3">Cam 3</div>
+        </div>
+
+        <div class="flex gap-4">
+            <div class="w-3/4 bg-white p-4 rounded shadow">
+                <div class="flex justify-between mb-2">
+                    <div></div>
+                    <div class="bg-gray-200 px-2 py-1 rounded" id="selected-camera">Camera 0</div>
+                </div>
+                <div class="aspect-video bg-gray-300 flex items-center justify-center">
+                    <video id="video" class="w-full h-full object-cover" autoplay playsinline></video>
+                </div>
+            </div>
+            <div class="w-1/4 space-y-4">
+                <div class="bg-white p-4 rounded shadow">
+                    <h3 class="text-xl font-bold mb-2">Adafruit IO Connect</h3>
+                    <div class="space-y-2"></div>
+                        <input type="text" id="adafruit-username" placeholder="Adafruit IO Username" class="border rounded px-2 py-1 w-full">
+                        <input type="text" id="adafruit-key" placeholder="Adafruit IO Key" class="border rounded px-2 py-1 w-full">
+                        <input type="text" id="feed-name" placeholder="Feed Name" class="border rounded px-2 py-1 w-full">
+                        <button class="bg-blue-500 text-white px-4 py-2 rounded w-full" onclick="connectAdafruit()">Connect</button>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded shadow"></div>
+                    <h3 class="text-xl font-bold mb-2">Logs</h3>
+                    <div id="logs" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
+        feather.replace();
+
+        // Function to update the timer with the current date and time
+        function updateTimer() {
+            const timerElement = document.getElementById('timer');
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are zero-based
+            const year = now.getFullYear();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            timerElement.textContent = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        }
+
+        // Update the timer every second
+        setInterval(updateTimer, 1000);
+
+        // Initial call to display the time immediately
+        updateTimer();
+
         async function startCamera() {
             const video = document.getElementById('video');
             const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -30,10 +121,12 @@
                     const formData = new FormData();
                     formData.append('file', blob, 'frame.jpg');  // Đặt tên cho file để FastAPI nhận diện
 
-                    await fetch("/upload_frame", {
+                    const response = await fetch("/upload_frame", {
                         method: "POST",
                         body: formData
                     });
+                    const data = await response.json();
+                    displayLogs(data.logs);
                 }, 'image/jpeg');
 
                 // Lặp lại hàm này để gửi frame tiếp theo
@@ -43,7 +136,54 @@
         }
 
         startCamera();
+
+        let selectedCamElement = document.getElementById('cam-0');
+
+        function selectCamera(camIndex) {
+            document.getElementById('camera-view').innerText = `Camera ${camIndex} - View`;
+            document.getElementById('selected-camera').innerText = `Camera ${camIndex}`;
+
+            // Remove the blue border from the previously selected camera
+            if (selectedCamElement) {
+                selectedCamElement.classList.remove('selected-camera');
+            }
+
+            // Add the blue border to the newly selected camera
+            selectedCamElement = document.getElementById(`cam-${camIndex}`);
+            selectedCamElement.classList.add('selected-camera');
+        }
+
+        // Select the first camera by default
+        selectCamera(0);
+
+        function connectAdafruit() {
+            const username = document.getElementById('adafruit-username').value;
+            const key = document.getElementById('adafruit-key').value;
+            const feedName = document.getElementById('feed-name').value;
+
+            fetch('/connect_adafruit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, key, feedName })
+            }).then(response => response.json())
+              .then(data => {
+                  console.log('Connected to Adafruit IO:', data);
+              }).catch(error => {
+                  console.error('Error connecting to Adafruit IO:', error);
+              });
+        }
+
+        function displayLogs(logs) {
+            const logsContainer = document.getElementById('logs');
+            logsContainer.innerHTML = ''; // Clear previous logs
+            logs.forEach(log => {
+                const logElement = document.createElement('div');
+                logElement.textContent = log;
+                logsContainer.appendChild(logElement);
+            });
+        }
     </script>
 </body>
-
 </html>

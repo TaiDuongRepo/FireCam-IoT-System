@@ -1,7 +1,8 @@
-import Dashboard from "./components/Dashboard";
+import React from 'react';
+import CameraStream from './components/CameraStream';
 
 function App() {
-  return Dashboard();
+  return <CameraStream />;
 }
 
 export default App;
